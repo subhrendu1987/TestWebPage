@@ -3,13 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-
     <title>Google Auth Demo</title>
-
-    <script src="https://accounts.google.com/gsi/client"
-            async defer></script>
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
 </head>
-
 <body>
 
 <h2>Google Authentication Demo</h2>
@@ -29,9 +25,7 @@
     <pre id="result"></pre>
 </div>
 
-
 <script>
-
 const GOOGLE_CLIENT_ID =
     "873564791429-3f0dlpnc5tma0o9467p9m7kqcm597qc3.apps.googleusercontent.com";
 
@@ -40,12 +34,10 @@ const APPS_SCRIPT_URL =
 
 let googleCredential = null;
 
-
 /*
- * Google Sign-In
+ * Initialize Google Sign-In
  */
 window.onload = function () {
-
     google.accounts.id.initialize({
         client_id: GOOGLE_CLIENT_ID,
         callback: handleGoogleLogin
@@ -60,88 +52,79 @@ window.onload = function () {
     );
 };
 
-
 /*
  * Called after successful Google authentication
  */
 function handleGoogleLogin(response) {
-
-    /*
-     * This is the Google ID token (JWT).
-     *
-     * DO NOT simply trust decoded values here.
-     * The backend must verify the token.
-     */
     googleCredential = response.credential;
 
-    /*
-     * Decode only for displaying information.
-     * This is NOT authentication.
-     */
-    const payload = JSON.parse(
-        atob(
-            googleCredential.split(".")[1]
-                .replace(/-/g, "+")
-                .replace(/_/g, "/")
-        )
-    );
+    try {
+        // Safe UTF-8 JWT Payload Decoder
+        const base64Url = googleCredential.split(".")[1];
+        const base64 = base64Url.replace(/-/g, "+").replace(/_/g, "/");
+        const jsonPayload = decodeURIComponent(
+            atob(base64)
+                .split("")
+                .map(c => "%" + ("00" + c.charCodeAt(0).toString(16)).slice(-2))
+                .join("")
+        );
+        const payload = JSON.parse(jsonPayload);
 
-    document.getElementById("user-email").textContent =
-        payload.email;
+        document.getElementById("user-email").textContent = payload.email;
+        document.getElementById("google-login").style.display = "none";
+        document.getElementById("user-info").style.display = "block";
 
-    document.getElementById("google-login").style.display =
-        "none";
-
-    document.getElementById("user-info").style.display =
-        "block";
+    } catch (err) {
+        console.error("Error parsing JWT:", err);
+        alert("Failed to read user authentication details.");
+    }
 }
 
-
 /*
- * Send data to Apps Script
+ * Send data to Apps Script backend
  */
 async function sendData() {
+    const resultElement = document.getElementById("result");
 
     if (!googleCredential) {
         alert("Please sign in first.");
         return;
     }
 
-    const data = {
+    resultElement.textContent = "Sending request to Google Apps Script...";
+
+    const dataPayload = {
         action: "attendance",
         roll: "102345",
         course: "CSE123",
         status: "PRESENT"
     };
 
-    const response = await fetch(APPS_SCRIPT_URL, {
+    try {
+        const response = await fetch(APPS_SCRIPT_URL, {
+            method: "POST",
+            method: "POST",
+            redirect: "follow", // Ensures Google Apps Script 302 redirects are followed
+            headers: {
+                "Content-Type": "text/plain;charset=utf-8" // Avoids preflight CORS issues
+            },
+            body: JSON.stringify({
+                credential: googleCredential,
+                data: dataPayload
+            })
+        });
 
-        method: "POST",
+        const result = await response.json();
+        resultElement.textContent = JSON.stringify(result, null, 2);
 
-        headers: {
-            "Content-Type": "text/plain"
-        },
-
-        body: JSON.stringify({
-
-            /*
-             * Google ID token
-             */
-            credential: googleCredential,
-
-            /*
-             * Application data
-             */
-            data: data
-        })
-    });
-
-    const result = await response.json();
-
-    document.getElementById("result").textContent =
-        JSON.stringify(result, null, 2);
+    } catch (error) {
+        console.error("Error posting to Apps Script:", error);
+        resultElement.textContent = JSON.stringify({
+            success: false,
+            error: "Failed to connect to Apps Script endpoint: " + error.toString()
+        }, null, 2);
+    }
 }
-
 </script>
 
 </body>
