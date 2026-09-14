@@ -1,55 +1,148 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <title>GitHub Pages Google Auth</title>
-  <script src="https://accounts.google.com/gsi/client" async defer></script>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title>Google Auth Demo</title>
+
+    <script src="https://accounts.google.com/gsi/client"
+            async defer></script>
 </head>
+
 <body>
-  <div id="buttonDiv"></div>
-  <div id="userStatus"></div>
 
-  <script>
-    // REPLACE WITH YOUR ACTUAL GOOGLE APPS SCRIPT WEB APP URL
-    const GAS_WEB_APP_URL = "https://script.google.com/macros/s/AKfycbxkCn_nIph5zjzZcd_m5O7XTJxSm6MPHXKpsm0H8uqELYByd09RcdX7DP8SuWo1OQ3NcA/exec";
-    const CLIENT_ID = "873564791429-lde895vap8vat147sn7ankh20coq67ht.apps.googleusercontent.com";
+<h2>Google Authentication Demo</h2>
 
-    function handleCredentialResponse(response) {
-      document.getElementById('userStatus').innerText = "Verifying authentication...";
+<div id="google-login"></div>
 
-      // Send the JWT ID token to your Google Apps Script backend
-      fetch(GAS_WEB_APP_URL, {
-        method: "POST",
-        headers: {
-          "Content-Type": "text/plain;charset=utf-8" // Use text/plain to prevent CORS preflight issues on GAS
-        },
-        body: JSON.stringify({ idToken: response.credential })
-      })
-      .then(res => res.json())
-      .then(data => {
-        if (data.status === "success") {
-          document.getElementById('userStatus').innerText = `Welcome, ${data.user.name} (${data.user.email})`;
-        } else {
-          document.getElementById('userStatus').innerText = "Authentication failed: " + data.message;
+<div id="user-info" style="display:none;">
+    <p>
+        Signed in as:
+        <strong id="user-email"></strong>
+    </p>
+
+    <button onclick="sendData()">
+        Send Data to Google Sheet
+    </button>
+
+    <pre id="result"></pre>
+</div>
+
+
+<script>
+
+const GOOGLE_CLIENT_ID =
+    "873564791429-dg63igbb8e3g75f9o9nro6dgge7gee2e.apps.googleusercontent.com";
+
+const APPS_SCRIPT_URL =
+    "https://script.google.com/macros/s/AKfycbwHoRq5ZZCRk9iMw9BrjQN_Jk-65n_vygegCuG1sVnsvKA_WqZ9piioTGnyYEkduoxItA/exec";
+
+let googleCredential = null;
+
+
+/*
+ * Google Sign-In
+ */
+window.onload = function () {
+
+    google.accounts.id.initialize({
+        client_id: GOOGLE_CLIENT_ID,
+        callback: handleGoogleLogin
+    });
+
+    google.accounts.id.renderButton(
+        document.getElementById("google-login"),
+        {
+            theme: "outline",
+            size: "large"
         }
-      })
-      .catch(err => {
-        console.error("Auth error:", err);
-        document.getElementById('userStatus').innerText = "Error contacting authentication server.";
-      });
+    );
+};
+
+
+/*
+ * Called after successful Google authentication
+ */
+function handleGoogleLogin(response) {
+
+    /*
+     * This is the Google ID token (JWT).
+     *
+     * DO NOT simply trust decoded values here.
+     * The backend must verify the token.
+     */
+    googleCredential = response.credential;
+
+    /*
+     * Decode only for displaying information.
+     * This is NOT authentication.
+     */
+    const payload = JSON.parse(
+        atob(
+            googleCredential.split(".")[1]
+                .replace(/-/g, "+")
+                .replace(/_/g, "/")
+        )
+    );
+
+    document.getElementById("user-email").textContent =
+        payload.email;
+
+    document.getElementById("google-login").style.display =
+        "none";
+
+    document.getElementById("user-info").style.display =
+        "block";
+}
+
+
+/*
+ * Send data to Apps Script
+ */
+async function sendData() {
+
+    if (!googleCredential) {
+        alert("Please sign in first.");
+        return;
     }
 
-    window.onload = function () {
-      google.accounts.id.initialize({
-        client_id: CLIENT_ID,
-        callback: handleCredentialResponse
-      });
-
-      google.accounts.id.renderButton(
-        document.getElementById("buttonDiv"),
-        { theme: "outline", size: "large" }
-      );
+    const data = {
+        action: "attendance",
+        roll: "102345",
+        course: "CSE123",
+        status: "PRESENT"
     };
-  </script>
+
+    const response = await fetch(APPS_SCRIPT_URL, {
+
+        method: "POST",
+
+        headers: {
+            "Content-Type": "text/plain"
+        },
+
+        body: JSON.stringify({
+
+            /*
+             * Google ID token
+             */
+            credential: googleCredential,
+
+            /*
+             * Application data
+             */
+            data: data
+        })
+    });
+
+    const result = await response.json();
+
+    document.getElementById("result").textContent =
+        JSON.stringify(result, null, 2);
+}
+
+</script>
+
 </body>
 </html>
