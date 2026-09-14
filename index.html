@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>GitHub Pages Google Auth</title>
+  <script src="https://accounts.google.com/gsi/client" async defer></script>
+</head>
+<body>
+  <div id="buttonDiv"></div>
+  <div id="userStatus"></div>
+
+  <script>
+    // REPLACE WITH YOUR ACTUAL GOOGLE APPS SCRIPT WEB APP URL
+    const GAS_WEB_APP_URL = "https://script.google.com/macros/s/YOUR_SCRIPT_ID/exec";
+    const CLIENT_ID = "YOUR_CLIENT_ID.apps.googleusercontent.com";
+
+    function handleCredentialResponse(response) {
+      document.getElementById('userStatus').innerText = "Verifying authentication...";
+
+      // Send the JWT ID token to your Google Apps Script backend
+      fetch(GAS_WEB_APP_URL, {
+        method: "POST",
+        headers: {
+          "Content-Type": "text/plain;charset=utf-8" // Use text/plain to prevent CORS preflight issues on GAS
+        },
+        body: JSON.stringify({ idToken: response.credential })
+      })
+      .then(res => res.json())
+      .then(data => {
+        if (data.status === "success") {
+          document.getElementById('userStatus').innerText = `Welcome, ${data.user.name} (${data.user.email})`;
+        } else {
+          document.getElementById('userStatus').innerText = "Authentication failed: " + data.message;
+        }
+      })
+      .catch(err => {
+        console.error("Auth error:", err);
+        document.getElementById('userStatus').innerText = "Error contacting authentication server.";
+      });
+    }
+
+    window.onload = function () {
+      google.accounts.id.initialize({
+        client_id: CLIENT_ID,
+        callback: handleCredentialResponse
+      });
+
+      google.accounts.id.renderButton(
+        document.getElementById("buttonDiv"),
+        { theme: "outline", size: "large" }
+      );
+    };
+  </script>
+</body>
+</html>
